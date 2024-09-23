@@ -149,9 +149,9 @@ class candFunction():
         Tk      = T_nw * T_w
         return np.real(Tk)
     
-# ------------------------------ GENERATIVE ALGORITHM CLASS ------------------------------
+# ------------------------------ GENETIC ALGORITHM CLASS ------------------------------
 
-class generativeAlgorithm():
+class geneticAlgorithm():
     
     # Fixed functional form, paramters learned
     
@@ -207,7 +207,7 @@ class generativeAlgorithm():
         self.init_pop()
         
         
-        print("Starting generative algorithm...")
+        print("Starting genetic algorithm...")
         for i in range(self.generations):
             
             self.sort_winners(i)
