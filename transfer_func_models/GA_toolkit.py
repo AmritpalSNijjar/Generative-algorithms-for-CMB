@@ -156,9 +156,13 @@ class candPolynomial():
     
     # Candidate Polynomial Function
     
-    def __init__(self, num_poly_terms, learn_offset = True):
+    def __init__(self, var_names, n_vars, order = "first", learn_offset = True):
         
-        # candPolynomial is of the form: offset + A1 * var_1 ^ B1 + A2 * var_2 ^ B2 + ....
+        # candPolynomial is of the form: 
+        # offset + A1 * var_1 ^ B1              + A2 * var_2 ^ B2              + .... 
+        #        + C1 * var_1 ^ D1 * var_2 ^ D2 + C2 * var_1 ^ D3 * var_3 ^ D4 + ...,
+        
+        # Where var_1 = var_names[0], var_2 = var_names[1], var_3 = var_names[2], ...
         
         # ( CURRENTLY only considers power laws in each of the parameters.... TODO: second order terms and beyond? )!!
         
@@ -166,52 +170,81 @@ class candPolynomial():
         # - including a learnable offset is OPTIONAL, else it is set to ZERO (?)
         
         self.learn_offset   = learn_offset
-        self.num_poly_terms = num_poly_terms
+        self.order = order
+        self.n_vars = num_vars # = len(var_names)
+        self.var_names = var_names
         
-        self.poly_genes     = 2*self.num_poly_terms
+        self.offset               = 0
         
-        # self.params = [A1, B1, A2, B2, ...., A_numpolyterms, B_numpolyterms]
-        # self.offset = offset
-        # if self.learn_offset = False .... self.offset will remain ZERO
+        self.n_first_order_terms  = self.n_vars
+        self.first_order_keeps    = np.zeros(self.n_first_order_terms, dtype = int)
+        self.first_order_coeffs   = np.ones(self.n_first_order_terms)     # [A1, A2, ...]
+        self.first_order_exps     = np.zeros(self.n_first_order_terms)    # [B1, B2, ...]
         
-        self.keep_polys     = np.ones(self.num_poly_terms) #EXPLAIN
-        self.params         = np.zeros(self.poly_genes)
-        self.offset         = 0
-         
-        # offset.       can range from [-10, 10]
-        self.offset_range   = [-10, 10] 
+        self.n_second_order_terms = (self.n_vars*(self.n_vars - 1))//2   # n(n-1)/2
+        self.second_order_keeps   = np.zeros(self.n_second_order_terms, dtype = int)
+        self.second_order_coeffs  = np.ones(self.n_second_order_terms)   # [C1, C2, ...]
+        self.second_order_exps    = np.zeros(2 * self.n_second_order_terms)  # [D1, D2, D3, D4, ...]
         
-        # (A1, A2, ...) can range from [-10, 10]
-        # (B1, B2, ...) can range from [0, 3]
         
-        self.poly_ranges    = np.array([[-10, 10] for i in range(self.poly_genes)]) 
+        self.second_order_orders  = np.zeros((self.n_second_order_terms, 2), dtype = int)
+        a = 0
+        b = 1
+        for i in range(self.n_second_order_terms):
+            
+            self.second_order_orders[i, 0] = a
+            self.second_order_orders[i, 1] = b
+            
+            if b == self.n_vars - 1:
+                    a += 1
+                    b  = a + 1
+                else:
+                    b += 1
+                    
+        self.offset_range   = np.array([-10, 10]) 
         
-        for i in range(1, self.poly_genes, 2):
-            self.poly_ranges[i] = [0, 3] 
+        self.first_order_coeff_ranges = np.array([[-10, 10] for i in range(self.n_first_order_terms)])
+        self.first_order_exp_ranges   = np.array([[0, 3] for i in range(self.n_first_order_terms)])
         
-    def load_params(self, params_file_loc):
-        # TODO
-        # params = load params from params_file_loc
-        # self.set_params(params)
-        return 0
+        self.second_order_coeff_ranges = np.array([[-2, 2] for i in range(self.n_second_order_terms)])
+        self.second_order_exp_ranges   = np.array([[0, 3] for i in range(2*self.n_second_order_terms)])
     
-    def set_params(self, params, offset):
-        self.params = params
-        self.offset = offset
+    def set_params(self, params_dict):
         
-    def set_ranges(self, all_ranges):
-        # all_ranges: first poly_genes elements are ranges of params, last element is range of offset
-        self.poly_ranges = ranges[:-1]
-        self.offset_range = ranges[-1]
+        self.offset = params_dict["offset"]
+        
+        self.first_order_keeps   = params_dict["first_order_keeps"]
+        self.first_order_coeffs  = params_dict["first_order_coeffs"]
+        self.first_order_exps    = params_dict["first_order_exps"]
+        
+        self.second_order_keeps  = params_dict["second_order_keeps"]
+        self.second_order_coeffs = params_dict["second_order_coeffs"]
+        self.second_order_exps   = params_dict["second_order_exps"]
+        
+    def set_ranges(self, ranges_dict):
+        
+        self.offset_range               = ranges_dict["offset_range"]
+        
+        self.first_order_coeff_ranges  = ranges_dict["first_order_coeff_ranges"]
+        self.first_order_exp_ranges     = ranges_dict["first_order_exp_ranges"]
+        
+        self.second_order_coeff_ranges = ranges_dict["second_order_coeff_ranges"]
+        self.second_order_exp_ranges    = ranges_dict["second_order_exp_ranges"]
     
     def randomize_params(self, rand_keep_polys = True):
-        self.params = np.random.uniform(self.poly_ranges[:, 0], self.poly_ranges[:, 1])
+        
+        self.first_order_coeffs = np.random.uniform(self.first_order_coeffs_ranges[:, 0], self.first_order_coeffs_ranges[:, 1])
+        self.first_order_exps = np.random.uniform(self.first_order_exps_ranges[:, 0], self.first_order_exps_ranges[:, 1])
+        
+        self.second_order_coeffs = np.random.uniform(self.second_order_coeffs_ranges[:, 0], self.second_order_coeffs_ranges[:, 1])
+        self.second_order_exps = np.random.uniform(self.second_order_exps_ranges[:, 0], self.second_order_exps_ranges[:, 1])
         
         if self.learn_offset:
             self.offset = np.random.uniform(self.offset_range[0], self.offset_range[1])
         
         if rand_keep_polys:
-            self.keep_polys = np.random.choice([0, 1], self.num_poly_terms)
+            self.first_order_keeps  = np.random.choice([0, 1], self.n_first_order_terms)
+            self.second_order_keeps = np.random.choice([0, 1], self.n_second_order_terms)
     
     def mutate_form(self, nterms_to_flip: int = 1):
         
@@ -226,56 +259,54 @@ class candPolynomial():
         
         return
     
-    def mutate_consts(self, ngenes_to_mutate: int = 1, range_mutate: bool = True):
+    def mutate_params(self, ngenes_to_mutate: int = 1):
+        
+        n1 = self.n_first_order_terms
+        n2 = self.n_second_order_terms
         
         # only terms which are marked as KEEP in keep_poly will be available to mutate
-        inds = [i for i in range(self.poly_genes) if self.keep_polys[i//2] == 1]
+        first_coeff_inds = [i for i in range(n1) if self.first_order_keeps[i] == 1]            # [0,..., n1 - 1 ], at most
+        first_exp_inds = [i + n1 for i in range(n1) if self.first_order_keeps[i] == 1]         # [n1,..., 2*n1 - 1]
+        second_coeff_inds = [j + 2*n1 for j in range(n2) if self.second_order_keeps[i] == 1]   # [2*n1,..., 2*n1 + n2 - 1]
+        second_exp_inds = [j + 2*n1 + n2 for j in range(n2) if self.second_order_keeps[i] == 1]# [2*n1 + n2,..., 2*n1 + 2*n2 - 1]
         
-        # if self.learn_offset == True, allow for the possibility of mutating the offset
+        inds = first_coeff_inds + first_exp_inds + second_coeff_inds + second_exp_inds
+        
         if self.learn_offset:
-            inds.append(self.poly_genes)
+            inds.append(2*n1 + 2*n2)
         
         mutate_inds = np.random.choice(inds, ngenes_to_mutate, replace = False)
         
-        if range_mutate:
-            # Randomize the gene according to range
-            
-            for i in mutate_inds:
-                
-                if self.learn_offset and i == self.poly_genes:
-                    self.offset = np.randpom.uniform(self.offset_range[0], self.offset_range[1])
-                else:
-                    self.params[i] = np.random.uniform(self.param_ranges[i, 0], self.param_ranges[i, 1])
-                   
-        else:
-            # Multiply the gene by a factor ~1... so as to only slightly modify the gene
-            # Use this mutation when the model is expected to be near convergence
-            
-            # HARD CODED?
-            # TUNABLE HYPERPARAMETER?
-                # VARIES ACCORDING TO GENERATION ?
-                # VARIES BY INPUT VALUE ?
-            factor_lb = 0.90 # LOWER BOUND
-            factor_ub = 1.10 # UPPER BOUND
-            
-            for i in mutate_inds:
-                
-                factor   = np.random.uniform(factor_lb, factor_ub)
-                
-                if self.learn_offset and i == self.poly_genes:
-                    self.offset    *= factor
-                else:
-                    self.params[i] *= factor
-                
+        for i in mutate_inds:
+
+            if self.learn_offset and i == 2*n1 + 2*n2:
+                self.offset = np.random.uniform(self.offset_range[0], self.offset_range[1])
+            elif i >= 2*n1 + n2:
+                j = i - (2*n1 + n2) 
+                self.second_order_exps[j] = np.random.uniform(self.second_order_exp_ranges[j, 0], self.second_order_exp_ranges[j, 1])
+            elif i >= 2*n1:
+                j = i - 2*n1
+                self.second_order_coeffs[j] = np.random.uniform(self.second_order_coeff_ranges[j, 0], self.second_order_coeff_ranges[j, 1])
+            elif i >= n1:
+                j = i - n1
+                self.first_order_exps[j] = np.random.uniform(self.first_order_exp_ranges[j, 0], self.first_order_exp_ranges[j, 1])
+            else:
+                self.first_order_coeffs[j] = np.random.uniform(self.first_order_coeff_ranges[j, 0], self.first_order_coeff_ranges[j, 1])
     
-    def compute(self, pars, k):
+    def compute(self, vars_dict):
         
-        assert len(pars) == self.num_poly_terms
+        # vars_dict looks like {"omega_b": 0.0224, "omega_m": 0.315, ...}
         
         val = self.offset
         
-        for i in range(self.num_poly_terms):
-            val += self.keep_polys[i] * self.params[2*i] * (k ** self.params[(2*i) + 1])
+        for i in range(self.n_first_order_terms):
+            val += self.first_order_keeps[i] * self.first_order_coeffs[i] * (vars_dict[self.var_names[i]] ** self.first_order_exps[i])
+            
+        if self.order == "second":
+            
+            for i in range(self.n_second_order_terms):
+                
+                val += self.second_order_keeps[i] * self.second_order_coeffs[i] * (vars_dict[self.var_names[self.second_order_orders[i, 0]]] ** self.second_order_coeffs[2*i]) * (vars_dict[self.var_names[self.second_order_orders[i, 1]]] ** self.second_order_coeffs[2*i + 1])
         
         return val
     
