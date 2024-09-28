@@ -257,37 +257,43 @@ class candPolynomial():
         #                             [1, 1, 0, 1, 1]
         #                             [1, 1, 1, 1, 0] etc. etc.
         
-        return
     
     def mutate_params(self, ngenes_to_mutate: int = 1):
         
-        n1 = self.n_first_order_terms
-        n2 = self.n_second_order_terms
-        
         # only terms which are marked as KEEP in keep_poly will be available to mutate
+        n1 = self.n_first_order_terms
         first_coeff_inds = [i for i in range(n1) if self.first_order_keeps[i] == 1]            # [0,..., n1 - 1 ], at most
         first_exp_inds = [i + n1 for i in range(n1) if self.first_order_keeps[i] == 1]         # [n1,..., 2*n1 - 1]
-        second_coeff_inds = [j + 2*n1 for j in range(n2) if self.second_order_keeps[i] == 1]   # [2*n1,..., 2*n1 + n2 - 1]
-        second_exp_inds = [j + 2*n1 + n2 for j in range(n2) if self.second_order_keeps[i] == 1]# [2*n1 + n2,..., 2*n1 + 2*n2 - 1]
+        inds = first_coeff_inds + first_exp_inds
         
-        inds = first_coeff_inds + first_exp_inds + second_coeff_inds + second_exp_inds
+        if self.order == "second:"
+            n2 = self.n_second_order_terms
+            second_coeff_inds = [j + 2*n1 for j in range(n2) if self.second_order_keeps[i] == 1]   # [2*n1,..., 2*n1 + n2 - 1]
+            second_exp_inds = [j + 2*n1 + n2 for j in range(n2) if self.second_order_keeps[i] == 1]# [2*n1 + n2,..., 2*n1 + 2*n2 - 1]
+            inds = inds + second_coeff_inds + second_exp_inds
         
         if self.learn_offset:
-            inds.append(2*n1 + 2*n2)
+            if self.order == "second":
+                inds.append(2*n1 + 2*n2)
+            else:
+                inds.append(2*n1)
         
         mutate_inds = np.random.choice(inds, ngenes_to_mutate, replace = False)
         
         for i in mutate_inds:
-
-            if self.learn_offset and i == 2*n1 + 2*n2:
+            
+            if self.learn_offset and i == inds[-1]:
                 self.offset = np.random.uniform(self.offset_range[0], self.offset_range[1])
-            elif i >= 2*n1 + n2:
-                j = i - (2*n1 + n2) 
-                self.second_order_exps[j] = np.random.uniform(self.second_order_exp_ranges[j, 0], self.second_order_exp_ranges[j, 1])
-            elif i >= 2*n1:
-                j = i - 2*n1
-                self.second_order_coeffs[j] = np.random.uniform(self.second_order_coeff_ranges[j, 0], self.second_order_coeff_ranges[j, 1])
-            elif i >= n1:
+                
+            if order == "second":
+                if i >= 2*n1 + n2:
+                    j = i - (2*n1 + n2) 
+                    self.second_order_exps[j] = np.random.uniform(self.second_order_exp_ranges[j, 0], self.second_order_exp_ranges[j, 1])
+                elif i >= 2*n1:
+                    j = i - 2*n1
+                    self.second_order_coeffs[j] = np.random.uniform(self.second_order_coeff_ranges[j, 0], self.second_order_coeff_ranges[j, 1])
+            
+            if i >= n1:
                 j = i - n1
                 self.first_order_exps[j] = np.random.uniform(self.first_order_exp_ranges[j, 0], self.first_order_exp_ranges[j, 1])
             else:
