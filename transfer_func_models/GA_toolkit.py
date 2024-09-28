@@ -246,17 +246,40 @@ class candPolynomial():
             self.first_order_keeps  = np.random.choice([0, 1], self.n_first_order_terms)
             self.second_order_keeps = np.random.choice([0, 1], self.n_second_order_terms)
     
-    def mutate_form(self, nterms_to_flip: int = 1):
+    def mutate_form(self, nterms_to_flip: int = 1, order_to_flip = "all"):
         
-        # keep_poly is something like [1, 1, 0, 1, 0]
+        # if first/second_order_keeps is something like [1, 1, 0, 1, 0],
         
         # this could be mutated to any of the following:
         #                           - [1, 0, 0, 1, 0]
-        #                             [1, 1, 0, 1, 0]
+        #                             [1, 1, 0, 0, 0]
         #                             [0, 1, 0, 1, 0]
         #                             [1, 1, 0, 1, 1]
         #                             [1, 1, 1, 1, 0] etc. etc.
         
+        n1 = self.n_first_order_terms
+        first_order_inds = [i for i in range(n1)] 
+        
+        if self.order == "second":
+            n2 = self.n_second_order_terms
+            second_order_inds = [j + n1 for j in range(n2)]
+        
+        if order_to_flip == "all":
+            inds = first_order_inds + second_order_inds
+        elif order_to_flip == "first":
+            inds = first_order_inds
+        elif order_to_flip == "second":
+            inds = seond_order_inds
+        
+        mutate_inds = np.random.choice(inds, nterms_to_flip, replace = False)
+        
+        for i in mutate_inds:
+            
+            if i >= n1:
+                j = i - n1
+                self.second_order_keeps[j] = 1 - self.second_order_keeps[j]
+            else:
+                self.first_order_keeps[i] = 1 - self.first_order_keeps[i]
     
     def mutate_params(self, ngenes_to_mutate: int = 1):
         
