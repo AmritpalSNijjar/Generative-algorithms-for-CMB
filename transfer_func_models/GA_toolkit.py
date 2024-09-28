@@ -156,23 +156,20 @@ class candPolynomial():
     
     # Candidate Polynomial Function
     
-    def __init__(self, var_names, n_vars, order = "first", learn_offset = True):
+    def __init__(self, var_names, order = "first", learn_offset = True):
         
         # candPolynomial is of the form: 
         # offset + A1 * var_1 ^ B1              + A2 * var_2 ^ B2              + .... 
         #        + C1 * var_1 ^ D1 * var_2 ^ D2 + C2 * var_1 ^ D3 * var_3 ^ D4 + ...,
         
-        # Where var_1 = var_names[0], var_2 = var_names[1], var_3 = var_names[2], ...
+        # Where var_1 : var_names[0], var_2 : var_names[1], var_3 : var_names[2], ...
         
-        # ( CURRENTLY only considers power laws in each of the parameters.... TODO: second order terms and beyond? )!!
-        
-        # - var_i are what inputs the polynomial depends on... could be omega_m or omega_b or any other parameter of the dataset
-        # - including a learnable offset is OPTIONAL, else it is set to ZERO (?)
+        # - offset may be learnable or permanently set at 0
         
         self.learn_offset   = learn_offset
         self.order = order
-        self.n_vars = num_vars # = len(var_names)
         self.var_names = var_names
+        self.n_vars = len(self.var_names)
         
         self.offset               = 0
         
