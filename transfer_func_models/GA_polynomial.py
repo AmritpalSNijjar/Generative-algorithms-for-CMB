@@ -229,8 +229,11 @@ class geneticAlgorithmPolynomial():
         self.population = config["population"]
         self.ranges_dict = config["ranges_dict"]
         
-        self.train_data = data_list # this should be a LIST of dataPoint instances
+        self.t_subgroup_size = config["t_subgroup_size"]
+        self.t_win_probability = config["t_win_probability"]
         
+        self.train_data = data_list # this should be a LIST of dataPoint instances
+        self.n_data = len(self.train_data)
         # cand polynomial requirements
         self.var_names = config["var_names"]
         self.order = config["order"]
@@ -246,17 +249,17 @@ class geneticAlgorithmPolynomial():
         #self.camb_data = self.load_camb_data(config["camb_data_fname"])
         # [[ommh2], [ombh2], [k], [T(k)]]
         
-        self.mutation_rate = config["mutation_rate"]
+        self.mutation_rates = config["mutation_rate"] #[% total mutation rate, % mutate params]
         
         # Percent best kids to keep i.e. keep the 40% most fit kids
         # Need to play around with this value
-        self.percent_winners = 0.40
+        self.percent_keep_per_gen = config["percent_keep_per_gen"]
         
         # NUMBER OF GENES TO MUTATE PER POP
         # Need to play around with this value
         self.ngenes_to_mutate = 2 
         
-        self.num_winners = int(self.percent_winners*self.population)
+        self.num_winners = int(self.percent_keep_per_gen*self.population)
         
         self.num_losers  = self.population - self.num_winners
         
@@ -274,52 +277,42 @@ class geneticAlgorithmPolynomial():
         
         # generate random initial population
         self.init_pop()
-        
         print("Starting genetic algorithm...")
+        print("Generation --    Fitness")
         for i in range(self.generations):
             
             self.tournament(i)
             if i%10 == 0:
-                print(f"Generation: {i + 1}")
-                print(f"Best Fitness: {self.best_fit_per_gen[i]}")
+                print(f"{i + 1} --    {self.best_fit_per_gen[i]}")
             
-            # a & b denote the indices of the parent functions to breed kid functions from
+            # a & b denote the indices of the parent functions inds from where to breed kid functions from
             
-            # kids1, kids2 = crossbreed(parent0, parent1)
-            # kids3, kids4 = crossbreed(parent0, parent2)
-            # ...
-            # kids7, kids8 = crossbreed(parent0, parent4)
-            # kids9, kids10 = crossbreed(parent1, parent2)
-            # ...
+            potential_parent_inds = [i for i in range(self.num_winners)]
             
-            a = 0
-            b = 1
-            
-            for i in range(self.num_winners, self.population, 2):
-            
-                if i + 1 <= self.population - 1:
-                    self.kids[i], self.kids[i + 1] = self.crossbreed(self.kids[a], self.kids[b])
+            for j in range(self.num_winners, self.population, 2):
+                
+                [a, b] = np.random.choice(potential_parent_inds, size = 2,replace = False)
+                
+                if j + 1 <= self.population - 1:
+                    self.kids[j], self.kids[j + 1] = self.crossbreed(self.kids[a], self.kids[b])
                 else: #(i + 1 is invalid entry... only want 1 kid)
-                    self.kids[i], _ = self.crossbreed(self.kids[a], self.kids[b])
-                    
-                if b < self.num_winners - 1:
-                    b += 1
-                else:
-                    a += 1
-                    b = a + 1
+                    self.kids[j], _ = self.crossbreed(self.kids[a], self.kids[b])
             
             # TO DO: Dynamic mutation rate, dynamic ngenes_to_mutate, range_mutate turned off eventually
             
-            for i in range(0, self.population):
-                if np.random.uniform() <= self.mutation_rate:
-                    if np.random.uniform() <= 0.5:
-                        self.kids[i].mutate_params(ngenes_to_mutate = 3)
+                
+            for k in range(0, self.population):
+                if np.random.uniform() <= self.mutation_rates[0]:
+                    if np.random.uniform() <= self.mutation_rates[1]:
+                        self.kids[k].mutate_params(ngenes_to_mutate = 3)
                     else:
-                        self.kids[i].mutate_form(nterms_to_flip = 1)
+                        self.kids[k].mutate_form(nterms_to_flip = 1)
         
         
         self.tournament(i)
-        self.best_fit_func = self.kids[0]
+        final_fitnesses = [self.compute_fitness(kid) for kid in self.kids]
+        most_fit_ind = np.argmin(final_fitnesses)
+        self.best_fit_func = self.kids[most_fit_ind]
     
     def compute_fitness(self, candPoly: candPolynomial):
         
@@ -328,7 +321,16 @@ class geneticAlgorithmPolynomial():
         
         N = 0
         
-        for dat in self.train_data:
+        # BATCH TRAIN:
+        # batch_size = self.n_data//3
+        # dat_inds = np.random.choice([i for i in range(self.n_data)], size = batch_size, replace = False)
+        
+        # TRAIN ON ALL DATA:
+        dat_inds = [i for i in range(self.n_data)]
+        
+        for ind in dat_inds:
+            
+            dat = self.train_data[ind]
             
             polynomial_eval = candPoly.compute(dat.params_dict)
             
@@ -343,7 +345,7 @@ class geneticAlgorithmPolynomial():
             modeled_f = eval_at_points**(polynomial_eval) 
             # ^(TODO: MAKE MODELED_F A FUNCTION THAT IS FED INTO THE GA THROUGH THE CONFIG FILE...... LIKE SELF.MODEL_SKELETON) 
 
-            val = np.abs((modeled_f - truth)/truth)
+            val = np.abs((modeled_f - truth)/(truth+1e-12))
             
             fitness = np.sum(val)
         
@@ -354,10 +356,10 @@ class geneticAlgorithmPolynomial():
     def tournament(self, cur_gen):
         
         #k: TOURNAMENT SUBGROUP SIZE
-        k = int(0.3*self.population) # => k is 30% of the total popluation... TODO: MAKE THIS A HYPERPARAMETER
+        k = self.t_subgroup_size
         
         #p: SUBGROUP SAMPLING PROPBABILITY
-        p = 0.75 # TODO: MAKE THIS A HYPERPARAMETER
+        p = self.t_win_probability
         
         #create temporary array to store tournament winners
         tournament_winners = np.empty(self.num_winners, dtype=candPolynomial)
@@ -375,11 +377,13 @@ class geneticAlgorithmPolynomial():
             
             subgroup_argsort = np.argsort(subgroup_fitnesses)
             subgroup_fitness_rankings = np.argsort(subgroup_argsort)
-            probabilities = p*(1-p)**subgroup_fitness_rankings
+            
+            probabilities = p*(1-p)**np.minimum(subgroup_fitness_rankings, np.zeros_like(subgroup_inds)+7)
+            
             
             # To make sure probabilities array sums to 1
             diff_from_one = 1 - np.sum(probabilities)
-            probabilities[0] += diff_from_one
+            probabilities[np.argmax(probabilities)] += diff_from_one
             
             winner_ind = np.random.choice(subgroup_inds, size = None, p = probabilities)
             
@@ -424,11 +428,11 @@ class geneticAlgorithmPolynomial():
         kid1_params_dict = {}
         kid2_params_dict = {}
         
-        kid1_params_dict["first_order_keeps"]   = parent1.first_order_keeps
-        kid1_params_dict["second_order_keeps"]  = parent1.second_order_keeps
-        
-        kid2_params_dict["first_order_keeps"]   = parent2.first_order_keeps
-        kid2_params_dict["second_order_keeps"]  = parent2.second_order_keeps
+        L = len(parent1.first_order_keeps)//2
+        kid1_params_dict["first_order_keeps"]   = np.concatenate((parent1.first_order_keeps[:L], parent2.first_order_keeps[L:]))
+        kid2_params_dict["first_order_keeps"]   = np.concatenate((parent2.first_order_keeps[:L], parent1.first_order_keeps[L:]))                                                       
+        kid1_params_dict["second_order_keeps"]  = np.concatenate((parent2.second_order_keeps[:L], parent1.second_order_keeps[L:]))
+        kid2_params_dict["second_order_keeps"]  = np.concatenate((parent1.second_order_keeps[:L], parent2.second_order_keeps[L:]))
         
         kid1_params_dict["offset"]              = parent2.offset
         kid2_params_dict["offset"]              = parent1.offset
